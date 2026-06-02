@@ -95,9 +95,12 @@ async def on_q3(call: CallbackQuery, callback_data: DiagAnswer, state: FSMContex
         lead.segment = segment
         lead.diagnostic_answers = answers
         lead.diagnostic_completed_at = completed_at
-        lead.funnel_stage = "warming"
-        lead.next_touch = 1
-        lead.next_action_at = next_action_at
+        # Не регрессируем тех, кто уже дальше по воронке
+        # (повторная диагностика просто обновляет сегмент и шлёт магнит).
+        if lead.funnel_stage in (None, "new", "diagnostic_done"):
+            lead.funnel_stage = "warming"
+            lead.next_touch = 1
+            lead.next_action_at = next_action_at
 
         session.add(
             Event(

@@ -3,7 +3,7 @@ import logging
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 
 from db.models import Event, Lead
@@ -37,3 +37,10 @@ async def cmd_stop(message: Message, state: FSMContext) -> None:
 async def fallback(message: Message) -> None:
     """Мягкий ответ на непонятный ввод вне FSM."""
     await message.answer(messages.FALLBACK)
+
+
+@router.callback_query()
+async def stale_callback(call: CallbackQuery) -> None:
+    """Устаревший callback (после рестарта или из старого сообщения) —
+    отвечаем тостом, чтобы не висел спиннер на клиенте."""
+    await call.answer("Эта кнопка устарела. Жми /start.", show_alert=False)
