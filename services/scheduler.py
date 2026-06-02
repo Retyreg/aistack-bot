@@ -21,6 +21,7 @@ from sqlalchemy import select
 from config import get_settings
 from db.models import Event, Lead
 from db.session import SessionLocal
+from services.broadcasts import register_broadcasts
 from services.funnel import DripMode, drip_mode, next_interval, render_offer
 from texts import messages
 
@@ -138,6 +139,7 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    register_broadcasts(scheduler, bot)
     scheduler.start()
     logger.info("Scheduler started: drip_sweep every %s min", settings.drip_interval_minutes)
     return scheduler

@@ -45,6 +45,18 @@ def q3_kb() -> InlineKeyboardMarkup:
     return _question_kb(3, messages.Q3_OPTIONS)
 
 
+def book_now_self_eb_kb() -> InlineKeyboardMarkup:
+    """Одна кнопка 'Забронировать за $200' → TariffChoice(self), для пуша 09.06."""
+    builder = InlineKeyboardBuilder()
+    builder.add(
+        InlineKeyboardButton(
+            text=messages.PUSH_EARLYBIRD_BUTTON,
+            callback_data=TariffChoice(code="self").pack(),
+        )
+    )
+    return builder.as_markup()
+
+
 def offer_kb(early_bird_active: bool) -> InlineKeyboardMarkup:
     """4 кнопки: 3 тарифа + 'Остался вопрос'."""
     builder = InlineKeyboardBuilder()
