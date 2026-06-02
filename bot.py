@@ -9,6 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import get_settings
 from handlers import common, diagnostic, start
+from services.scheduler import start_scheduler
 
 
 def setup_logging() -> None:
@@ -36,9 +37,11 @@ async def main() -> None:
 
     logging.getLogger(__name__).info("Bot starting")
     await bot.delete_webhook(drop_pending_updates=True)
+    scheduler = start_scheduler(bot)
     try:
         await dp.start_polling(bot)
     finally:
+        scheduler.shutdown(wait=False)
         await bot.session.close()
 
 

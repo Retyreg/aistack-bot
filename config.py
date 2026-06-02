@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     timezone: str = "Asia/Almaty"
     earlybird_deadline: date
     course_start: date
+    drip_interval_minutes: int = 15
     landing_url: str = "https://aistackca.com"
     landing_self: str = "https://aistackca.com/#lead-self"
     landing_supported: str = "https://aistackca.com/#lead-supported"

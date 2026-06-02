@@ -1,17 +1,23 @@
-"""Логика воронки: подсчёт сегмента, расписание дрипа.
+"""Логика воронки: сегмент, расписание дрипа, рендер оффера.
 
-Сегмент: большинство из 3 ответов; тай-брейк product > marketer > ops.
-Дрип: расписание сжимается под EARLYBIRD_DEADLINE — см. compute_first_touch_at.
+- calc_segment — большинство из 3 ответов, тай-брейк product > marketer > ops.
+- drip_mode — full/compressed/ultra/post по дельте до EB-дедлайна.
+- compute_first_touch_at / next_interval — расписание дрипа.
+- is_early_bird_active / render_offer — рендер оффера с динамической ценой.
 """
 
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
 
+from aiogram.types import InlineKeyboardMarkup
+
 from config import get_settings
+from texts import messages
 
 Segment = Literal["marketer", "ops", "product"]
+DripMode = Literal["full", "compressed", "ultra", "post"]
 
 _TIEBREAKER: tuple[Segment, ...] = ("product", "marketer", "ops")
 
@@ -27,26 +33,57 @@ def calc_segment(answers: list[Segment]) -> Segment:
     raise ValueError(f"Unexpected segment state: {counts!r}")
 
 
-def compute_first_touch_at(diagnostic_done_at: datetime) -> datetime:
-    """Когда отправить касание 1 дрипа. Зависит от того, сколько дней до EB-дедлайна.
-
-    Логика по SPEC §7.5 / §8.1:
-    - ≥ 5 дней до дедлайна → полный дрип, касания раз в ~24ч.
-    - 2–4 дня → ~12ч между касаниями.
-    - < 2 дней → одно объединённое касание через ~6ч, потом оффер.
-    - после дедлайна → оффер сразу (через 30 минут), пост-EB цена.
-
-    Возвращает timezone-aware datetime в TZ из конфига.
-    """
+def _local_date(now: datetime) -> date:
     settings = get_settings()
     tz = ZoneInfo(settings.timezone)
-    local_now = diagnostic_done_at.astimezone(tz) if diagnostic_done_at.tzinfo else diagnostic_done_at
-    days_left = (settings.earlybird_deadline - local_now.date()).days
+    aware = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    return aware.astimezone(tz).date()
 
-    if days_left < 0:
-        return diagnostic_done_at + timedelta(minutes=30)
-    if days_left < 2:
-        return diagnostic_done_at + timedelta(hours=6)
-    if days_left < 5:
-        return diagnostic_done_at + timedelta(hours=12)
-    return diagnostic_done_at + timedelta(hours=24)
+
+def days_to_deadline(now: datetime) -> int:
+    """Дней до EB-дедлайна (по локальной дате аудитории)."""
+    settings = get_settings()
+    return (settings.earlybird_deadline - _local_date(now)).days
+
+
+def drip_mode(now: datetime) -> DripMode:
+    """Режим дрипа в зависимости от дельты до EB-дедлайна."""
+    d = days_to_deadline(now)
+    if d < 0:
+        return "post"
+    if d < 2:
+        return "ultra"
+    if d < 5:
+        return "compressed"
+    return "full"
+
+
+def next_interval(mode: DripMode) -> timedelta:
+    """Интервал между касаниями дрипа."""
+    return {
+        "full": timedelta(hours=24),
+        "compressed": timedelta(hours=12),
+        "ultra": timedelta(hours=6),
+        "post": timedelta(minutes=30),
+    }[mode]
+
+
+def compute_first_touch_at(diagnostic_done_at: datetime) -> datetime:
+    """Когда послать касание 1 дрипа — first touch берёт next_interval(mode)."""
+    return diagnostic_done_at + next_interval(drip_mode(diagnostic_done_at))
+
+
+def is_early_bird_active(now: datetime | None = None) -> bool:
+    """EB ещё открыт?"""
+    return days_to_deadline(now or datetime.now(timezone.utc)) >= 0
+
+
+def render_offer(now: datetime | None = None) -> tuple[str, InlineKeyboardMarkup]:
+    """Текст оффера + клавиатура тарифов. Цена self переключается по EB."""
+    from keyboards.inline import offer_kb  # локальный импорт от циклов
+
+    eb = is_early_bird_active(now)
+    self_price = "$200" if eb else "$300"
+    eb_warning = messages.OFFER_EB_WARNING if eb else ""
+    text = messages.OFFER_TEMPLATE.format(self_price=self_price, eb_warning=eb_warning)
+    return text, offer_kb(early_bird_active=eb)
