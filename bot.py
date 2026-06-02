@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import get_settings
-from handlers import common, diagnostic, start
+from handlers import booking, common, diagnostic, offer, start
 from services.scheduler import start_scheduler
 
 
@@ -32,6 +32,8 @@ async def main() -> None:
 
     dp.include_router(start.router)
     dp.include_router(diagnostic.router)
+    dp.include_router(offer.router)
+    dp.include_router(booking.router)
     # common.router включает fallback на любое сообщение — регистрируем последним
     dp.include_router(common.router)
 
