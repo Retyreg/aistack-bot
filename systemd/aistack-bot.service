@@ -1,0 +1,13 @@
+[Unit]
+Description=AIstack funnel bot
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/opt/aistack-bot
+ExecStart=/opt/aistack-bot/.venv/bin/python bot.py
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/aistack-bot/.env
+
+[Install]
+WantedBy=multi-user.target
