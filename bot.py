@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import get_settings
-from handlers import common, start
+from handlers import common, diagnostic, start
 
 
 def setup_logging() -> None:
@@ -30,6 +30,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
 
     dp.include_router(start.router)
+    dp.include_router(diagnostic.router)
     # common.router включает fallback на любое сообщение — регистрируем последним
     dp.include_router(common.router)
 

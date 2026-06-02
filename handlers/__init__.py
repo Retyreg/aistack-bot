@@ -1,3 +1,3 @@
-from . import common, start
+from . import common, diagnostic, start
 
-__all__ = ["start", "common"]
+__all__ = ["start", "diagnostic", "common"]
