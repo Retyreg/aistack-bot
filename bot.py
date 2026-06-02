@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import get_settings
-from handlers import booking, common, diagnostic, offer, start
+from handlers import admin, booking, common, diagnostic, offer, start
 from services.scheduler import start_scheduler
 
 
@@ -30,6 +30,8 @@ async def main() -> None:
     )
     dp = Dispatcher(storage=MemoryStorage())
 
+    # admin.router перед остальными — admin-команды не должны попасть в FSM-фильтры
+    dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(diagnostic.router)
     dp.include_router(offer.router)

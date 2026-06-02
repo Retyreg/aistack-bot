@@ -1,3 +1,3 @@
-from . import booking, common, diagnostic, offer, start
+from . import admin, booking, common, diagnostic, offer, start
 
-__all__ = ["start", "diagnostic", "offer", "booking", "common"]
+__all__ = ["start", "diagnostic", "offer", "booking", "admin", "common"]
