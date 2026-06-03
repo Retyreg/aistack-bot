@@ -1,0 +1,57 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r requirements.txt
+      - name: Syntax check
+        run: python -m compileall -q bot.py config.py db handlers keyboards services texts tools migrations
+
+  deploy:
+    name: SSH deploy
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "185.115.33.211 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICBTpN1aNeyw4ocefIIiuDAe+LTk0iQoKfJU/VDnqmqS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Pull + deps + migrate + restart
+        run: |
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            set -euo pipefail
+            cd ~/apps/aistack-bot
+            git fetch origin main
+            git reset --hard origin/main
+            .venv/bin/pip install --quiet -r requirements.txt
+            .venv/bin/alembic upgrade head
+            sudo systemctl restart aistack-bot
+            sleep 5
+            sudo systemctl is-active aistack-bot
+          '
+
+      - name: Smoke (polling resumed?)
+        run: |
+          sleep 3
+          ssh -i ~/.ssh/id_ed25519 ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} '
+            sudo journalctl -u aistack-bot --no-pager --since "60 seconds ago" | grep -q "Run polling for bot" && echo "polling OK"
+          '
