@@ -14,10 +14,16 @@ class Lead(Base):
     __tablename__ = "leads"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
     username: Mapped[str | None] = mapped_column(String, nullable=True)
     first_name: Mapped[str | None] = mapped_column(String, nullable=True)
     source: Mapped[str | None] = mapped_column(String, nullable=True)
+    # 'bot' (пришёл через /start) | 'landing' (отправил форму с aistackca.com)
+    source_type: Mapped[str] = mapped_column(
+        String, nullable=False, default="bot", server_default="bot"
+    )
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+    country: Mapped[str | None] = mapped_column(String, nullable=True)
 
     segment: Mapped[str | None] = mapped_column(String, nullable=True)
     diagnostic_answers: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
@@ -53,7 +59,7 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String, nullable=False, index=True)
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

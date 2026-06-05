@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     earlybird_deadline: date
     course_start: date
     drip_interval_minutes: int = 15
+    # HTTP-эндпоинт для приёма заявок с лендинга. webhook_secret обязателен,
+    # без него /api/lead отдаст 401.
+    webhook_secret: str = ""
+    webhook_port: int = 8081
     landing_url: str = "https://aistackca.com"
     landing_self: str = "https://aistackca.com/#lead-self"
     landing_supported: str = "https://aistackca.com/#lead-supported"

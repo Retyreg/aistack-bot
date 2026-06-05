@@ -255,6 +255,16 @@ ADMIN_QUESTION = (
     "{question}"
 )
 
+ADMIN_NEW_LANDING_LEAD = (
+    "📝 <b>Новая заявка с лендинга</b>\n\n"
+    "Тариф: {tariff}\n"
+    "Имя: {name}\n"
+    "Телефон: {phone}\n"
+    "Email: {email}\n"
+    "Страна: {country}\n"
+    "Source: {source}"
+)
+
 
 # ─── Броадкасты (касания по абсолютным датам) ─────────────────────────────
 

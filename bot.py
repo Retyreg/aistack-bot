@@ -8,6 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramForbiddenError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
+from aiohttp import web
 from sqlalchemy import select
 
 from config import get_settings
@@ -15,6 +16,7 @@ from db.models import Event, Lead
 from db.session import SessionLocal
 from handlers import admin, booking, common, diagnostic, offer, start
 from services.scheduler import start_scheduler
+from services.web import create_app as create_web_app
 
 
 def setup_logging() -> None:
@@ -81,10 +83,22 @@ async def main() -> None:
     logging.getLogger(__name__).info("Bot starting")
     await bot.delete_webhook(drop_pending_updates=True)
     scheduler = start_scheduler(bot)
+
+    # HTTP-эндпоинт /api/lead — приём заявок с лендинга.
+    web_app = create_web_app(bot)
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", settings.webhook_port)
+    await site.start()
+    logging.getLogger(__name__).info(
+        "Web endpoint listening on 0.0.0.0:%s", settings.webhook_port
+    )
+
     try:
         await dp.start_polling(bot)
     finally:
         scheduler.shutdown(wait=False)
+        await runner.cleanup()
         await bot.session.close()
 
 
