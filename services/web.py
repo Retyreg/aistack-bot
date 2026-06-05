@@ -31,7 +31,7 @@ from aiohttp import web
 
 from config import get_settings
 from db.models import Event, Lead
-from db.session import SessionLocal
+from db.session import get_session
 from services.notify import send_admin
 from texts import messages
 
@@ -66,7 +66,7 @@ async def handle_lead(request: web.Request) -> web.Response:
     utm = payload.get("utm") or {}
 
     now = datetime.now(timezone.utc)
-    async with SessionLocal() as session:
+    async with get_session() as session:
         lead = Lead(
             telegram_id=None,
             source_type="landing",
