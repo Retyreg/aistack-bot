@@ -94,6 +94,17 @@ async def handle_lead(request: web.Request) -> web.Response:
                 },
             )
         )
+        # Дублирующий 'booked' для event-based funnel в /stats.
+        # services/analytics.funnel_snapshot считает distinct по telegram_id,
+        # поэтому landing-лиды (telegram_id=NULL) приземляются как одна группа.
+        # Достаточно, чтобы у landing-лида был такой же тип event'а, как у бот-лидов.
+        session.add(
+            Event(
+                telegram_id=None,
+                event_type="booked",
+                meta={"lead_id": lead.id, "tariff": tariff, "via": "landing"},
+            )
+        )
         lead_id = lead.id
 
     bot: Bot = request.app["bot"]
