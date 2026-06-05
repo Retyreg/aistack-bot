@@ -32,6 +32,15 @@
 
 ## 2. Два репозитория, две роли
 
+### Интеграция landing ↔ bot (с 05.06)
+
+Заявка с формы `aistackca.com` теперь параллельно идёт в БД бота и в админский Telegram через `@aistack_leads_bot`:
+- Landing `app/api/lead/route.ts` после email+Sheet вызывает `sendLeadToBot` (`lib/bot-webhook.ts`).
+- Бот поднимает aiohttp web.Application внутри того же asyncio loop (services/web.py), биндится на `0.0.0.0:8081`. POST `/api/lead` авторизуется `X-Webhook-Secret` (env `WEBHOOK_SECRET` на боте, `BOT_WEBHOOK_SECRET` на лендинге — одинаковые).
+- Транспорт HTTP без TLS (server-to-server в доверенной сети, secret 32 random bytes hex). При росте трафика или compliance — поднять nginx с Let's Encrypt поверх 8081.
+- Лид пишется с `source_type='landing'`, `funnel_stage='booked'`, `is_subscribed=false` (без telegram_id мы ему писать всё равно не можем). Events: `landing_form_submitted` (с метаданными) + `booked` (чтобы /stats считал в воронке).
+- Миграция 0002 сделала `leads.telegram_id` и `events.telegram_id` nullable, добавила `leads.source_type`, `email`, `country`.
+
 ### aistack-landing — холодный трафик
 - **GitHub:** `github.com/Retyreg/aistack-landing` (public)
 - **Локально:** `~/ai-predprinimatel-landing/` (имя папки исторически не совпадает с репо — это тот же проект)
