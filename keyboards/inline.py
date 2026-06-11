@@ -2,6 +2,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from config import get_settings
 from texts import messages
 
 
@@ -21,6 +22,13 @@ class TariffChoice(CallbackData, prefix="tariff"):
 def welcome_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.add(InlineKeyboardButton(text=messages.WELCOME_BUTTON, callback_data="diag_start"))
+    return builder.as_markup()
+
+
+def replay_kb() -> InlineKeyboardMarkup:
+    """Кнопка-ссылка на запись эфира (прикрепляется к PDF лид-магнита)."""
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text=messages.REPLAY_BUTTON, url=get_settings().replay_url))
     return builder.as_markup()
 
 
