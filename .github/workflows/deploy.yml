@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          echo "185.115.33.211 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICBTpN1aNeyw4ocefIIiuDAe+LTk0iQoKfJU/VDnqmqS" > ~/.ssh/known_hosts
+          echo "38.180.108.141 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKJ0FFgM2pdnOBe2noSZQ6iZS5/hMwu55IpjIlOIdVea" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Pull + deps + migrate + restart
