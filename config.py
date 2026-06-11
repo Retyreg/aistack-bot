@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     landing_personal: str = "https://aistackca.com/#lead-personal"
     author_contact: str = "@vatyutov"
 
+    # Лид-магнит с вебинара 10.06: ссылка на Unlisted-запись эфира.
+    replay_url: str = "https://youtu.be/lsA4xftUMCk"
+    # Источники, на которых /start сразу отдаёт промт+реплей (см. is_webinar_source).
+    # Дефолт-онли: НЕ задаём в .env — pydantic-settings попытается JSON-парсить
+    # complex-type поле и упадёт на строке "a,b" (как admin_ids, но без NoDecode).
+    webinar_leadmagnet_sources: set[str] = {"src_webinar", "src_ig", "src_tt", "src_shorts"}
+
     @field_validator("admin_ids", mode="before")
     @classmethod
     def _parse_admin_ids(cls, v: object) -> list[int]:
@@ -43,3 +50,16 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def is_webinar_source(source: str | None) -> bool:
+    """True, если с этого source отдаём промт+реплей сразу на входе.
+
+    Матчим точные источники из WEBINAR_LEADMAGNET_SOURCES плюс любой source
+    с префиксом ``src_yt`` (покрывает ``src_yt``, ``src_yt_webinar0610`` и т.п.).
+    """
+    if not source:
+        return False
+    if source.startswith("src_yt"):
+        return True
+    return source in get_settings().webinar_leadmagnet_sources

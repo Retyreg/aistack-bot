@@ -51,9 +51,22 @@ aistack-bot/
   keyboards/              # инлайн-клавиатуры
   texts/                  # копирайт воронки + промпты лид-магнита
   services/               # notify, funnel logic, scheduler
+  assets/                 # бинарные материалы (PDF лид-магнита) — едут на сервер через git
   migrations/             # alembic
   docs/                   # SPEC.md + исходники текстов
 ```
+
+## Лид-магнит с вебинара (промт + реплей)
+
+С вебинар-источников (`src_webinar`, `src_ig`, `src_tt`, `src_shorts` и любой
+`src_yt*` — см. `is_webinar_source` в `config.py`) `/start` сразу отдаёт PDF
+`assets/AIstack-competitor-analysis-prompt.pdf` + кнопку на запись эфира, затем
+мостик в диагностику. Промт идемпотентен (повторный `/start` его не дублирует).
+
+- `REPLAY_URL` в `.env` — ссылка на Unlisted-запись эфира (дефолт совпадает с прод).
+  На сервере прописать в `/home/deploy/apps/aistack-bot/.env`.
+- PDF лид-магнита **обязателен** в `assets/` и коммитится в репо (на сервер
+  попадает через `git reset --hard`). Без файла webinar-ветка падает на отправке.
 
 ## Деплой
 
