@@ -6,10 +6,11 @@ from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import FSInputFile, Message
 from sqlalchemy import select
 
-from config import is_webinar_source
+from config import get_settings, is_webinar_source
 from db.models import Event, Lead
 from db.session import get_session
 from keyboards.inline import replay_kb, welcome_kb
+from services import webinar as webinar_svc
 from services.events import event_exists, log_event
 from texts import messages
 
@@ -64,6 +65,8 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             else False
         )
 
+    webinar_open = not webinar_svc.is_over()
+
     if webinar:
         if not magnet_already_sent:
             await message.answer(messages.WEBINAR_LEADMAGNET_INTRO)
@@ -74,7 +77,16 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             )
             async with get_session() as session:
                 await log_event(session, user.id, "leadmagnet_sent", meta={"kind": "webinar"})
-        await message.answer(messages.WEBINAR_AFTER_MAGNET, reply_markup=welcome_kb())
+        await message.answer(
+            messages.WEBINAR_AFTER_MAGNET, reply_markup=welcome_kb(webinar_open=webinar_open)
+        )
         return
 
-    await message.answer(messages.WELCOME, reply_markup=welcome_kb())
+    await message.answer(
+        messages.welcome(
+            webinar_date=webinar_svc.human_date(),
+            webinar_title=get_settings().webinar_title,
+            webinar_open=webinar_open,
+        ),
+        reply_markup=welcome_kb(webinar_open=webinar_open),
+    )

@@ -203,3 +203,124 @@ def format_sources(report: dict) -> str:
         "«Людей» — уникальных. Аудиты и вебинар — по метке того же лида.</i>"
     )
     return "\n".join(lines)
+
+
+# ─── /webinars: проверить, что цепочка напоминаний реально взведена ────────
+
+async def webinar_snapshot() -> dict:
+    """Кто записан и когда каждому уйдёт следующее напоминание.
+
+    Нужно ровно для одного вопроса перед эфиром: «цепочка правда выстрелит?»
+    Не агрегат ради агрегата — тут видно и стадию, и точное время.
+    """
+    from services import webinar as svc  # локально: svc импортирует keyboards
+
+    key = svc.webinar_key()
+    async with SessionLocal() as session:
+        total = await session.scalar(
+            select(func.count(WebinarRegistration.id)).where(
+                WebinarRegistration.webinar_key == key
+            )
+        ) or 0
+
+        # Отписавшиеся молчат — то же условие, что в reminder_sweep.
+        unsubscribed = (
+            select(Lead.id)
+            .where(
+                Lead.telegram_id == WebinarRegistration.telegram_id,
+                Lead.is_subscribed.is_(False),
+            )
+            .exists()
+        )
+        armed = await session.scalar(
+            select(func.count(WebinarRegistration.id)).where(
+                WebinarRegistration.webinar_key == key,
+                WebinarRegistration.is_active.is_(True),
+                WebinarRegistration.next_reminder_stage != svc.STAGE_DONE,
+                WebinarRegistration.next_reminder_at.is_not(None),
+                ~unsubscribed,
+            )
+        ) or 0
+
+        by_stage = (
+            await session.execute(
+                select(
+                    WebinarRegistration.next_reminder_stage,
+                    func.count(WebinarRegistration.id),
+                    func.min(WebinarRegistration.next_reminder_at),
+                )
+                .where(WebinarRegistration.webinar_key == key)
+                .group_by(WebinarRegistration.next_reminder_stage)
+                .order_by(WebinarRegistration.next_reminder_stage)
+            )
+        ).all()
+
+        recent = (
+            await session.execute(
+                select(WebinarRegistration)
+                .where(WebinarRegistration.webinar_key == key)
+                .order_by(WebinarRegistration.id.desc())
+                .limit(10)
+            )
+        ).scalars().all()
+
+        by_source = (
+            await session.execute(
+                select(WebinarRegistration.source, func.count(WebinarRegistration.id))
+                .where(WebinarRegistration.webinar_key == key)
+                .group_by(WebinarRegistration.source)
+                .order_by(func.count(WebinarRegistration.id).desc())
+            )
+        ).all()
+
+    return {
+        "key": key,
+        "when": svc.human_when(),
+        "is_over": svc.is_over(),
+        "total": total,
+        "armed": armed,
+        "by_stage": [(s, c, at) for s, c, at in by_stage],
+        "by_source": [((src or NO_SOURCE_LABEL), c) for src, c in by_source],
+        "recent": [
+            (r.telegram_id, r.name, r.next_reminder_stage, r.next_reminder_at, r.is_active)
+            for r in recent
+        ],
+        "stage_times": [(s, svc.stage_time(d)) for s, d, _t, _j in svc.STAGES],
+        "done_stage": svc.STAGE_DONE,
+    }
+
+
+def format_webinar(snap: dict) -> str:
+    lines = [
+        f"🎤 <b>Вебинар {snap['key']}</b> · {snap['when']}",
+        ("⚠️ эфир уже начался/прошёл" if snap["is_over"] else "✅ регистрация открыта"),
+        f"\nЗаписано: <b>{snap['total']}</b>  ·  ждут напоминаний: <b>{snap['armed']}</b>",
+        "\n<b>Расписание касаний (UTC)</b>",
+    ]
+    for stage, at in snap["stage_times"]:
+        lines.append(f"  стадия {stage}: {at:%d.%m %H:%M}")
+
+    lines.append("\n<b>Кто на какой стадии</b>")
+    if not snap["by_stage"]:
+        lines.append("  — пока никого")
+    for stage, cnt, nearest in snap["by_stage"]:
+        label = "цепочка отработана" if stage == snap["done_stage"] else f"ждут стадию {stage}"
+        when = f" · ближайшее {nearest:%d.%m %H:%M} UTC" if nearest else ""
+        lines.append(f"  {label}: {cnt}{when}")
+
+    if snap["by_source"]:
+        lines.append("\n<b>По источникам</b>")
+        for src, cnt in snap["by_source"]:
+            lines.append(f"  {html.escape(str(src))}: {cnt}")
+
+    if snap["recent"]:
+        lines.append("\n<b>Последние регистрации</b>")
+        for tg_id, name, stage, at, active in snap["recent"]:
+            flag = "" if active else " (неактивна)"
+            when = f"{at:%d.%m %H:%M}" if at else "—"
+            lines.append(
+                f"  <code>{tg_id}</code> {html.escape(name or '—')} · "
+                f"стадия {stage} в {when}{flag}"
+            )
+
+    return "\n".join(lines)

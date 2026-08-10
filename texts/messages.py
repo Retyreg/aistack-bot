@@ -3,17 +3,31 @@
 Шаг 3 добавляет: 4 касания прогрева + оффер-шаблон + ярлыки тарифов.
 """
 
-WELCOME = (
+_WELCOME_HEAD = (
     "Привет! Это бот курса <b>AIstack</b> 🤖\n\n"
     "Что могу прямо сейчас:\n\n"
     "🔍 <b>Разобрать твою идею.</b> Пять вопросов — и я скажу прямо, жива она "
     "или мертва, и с какого шага начинать. Разбор читает и правит Дмитрий "
     "лично, не робот.\n\n"
-    "🎤 <b>Записать на эфир 27 августа</b> — «Запуск продукта с AI-командой».\n\n"
+)
+# Дата и название эфира приезжают из WEBINAR_AT/WEBINAR_TITLE — руками в
+# текстах их не пишем, иначе перенос эфира потребует правки копирайта.
+_WELCOME_WEBINAR = "🎤 <b>Записать на эфир {webinar_date}</b> — «{webinar_title}».\n\n"
+_WELCOME_TAIL = (
     "🤖 <b>Подобрать AI-сотрудника</b>, которого стоит нанять первым — "
     "3 вопроса за минуту.\n\n"
     "С чего начнём?"
 )
+
+
+def welcome(*, webinar_date: str, webinar_title: str, webinar_open: bool) -> str:
+    """Приветствие. Прошедший эфир из меню исчезает — и текстом, и кнопкой."""
+    middle = (
+        _WELCOME_WEBINAR.format(webinar_date=webinar_date, webinar_title=webinar_title)
+        if webinar_open
+        else ""
+    )
+    return _WELCOME_HEAD + middle + _WELCOME_TAIL
 
 WELCOME_BUTTON = "🤖 Подобрать AI-сотрудника"
 

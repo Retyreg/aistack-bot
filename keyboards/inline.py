@@ -32,13 +32,18 @@ class AuditAction(CallbackData, prefix="aud"):
     audit_id: int
 
 
-def welcome_kb() -> InlineKeyboardMarkup:
-    """Главное меню: аудит идеи (основной магнит), вебинар, диагностика."""
+def welcome_kb(*, webinar_open: bool = True) -> InlineKeyboardMarkup:
+    """Главное меню: аудит идеи (основной магнит), вебинар, диагностика.
+
+    Прошедший эфир из меню убираем — кнопка на него всё равно ответила бы
+    «этот эфир уже прошёл».
+    """
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=audit_texts.AUDIT_BUTTON, callback_data="audit_start"))
-    builder.row(
-        InlineKeyboardButton(text=webinar_texts.WEBINAR_BUTTON, callback_data="webinar_reg")
-    )
+    if webinar_open:
+        builder.row(
+            InlineKeyboardButton(text=webinar_texts.WEBINAR_BUTTON, callback_data="webinar_reg")
+        )
     builder.row(InlineKeyboardButton(text=messages.WELCOME_BUTTON, callback_data="diag_start"))
     return builder.as_markup()
 

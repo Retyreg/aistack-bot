@@ -64,7 +64,10 @@ async def _deliver(call_or_message, request_id: int, text: str) -> None:
     webinar_open = not webinar_svc.is_over()
     body = texts.AUDIT_VERDICT_HEADER + text
     if webinar_open:
-        body += texts.AUDIT_VERDICT_CTA.format(webinar_title=get_settings().webinar_title)
+        body += texts.AUDIT_VERDICT_CTA.format(
+            webinar_date=webinar_svc.human_date(),
+            webinar_title=get_settings().webinar_title,
+        )
 
     try:
         await bot.send_message(

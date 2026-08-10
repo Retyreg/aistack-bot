@@ -27,7 +27,7 @@ from aiogram.exceptions import TelegramForbiddenError
 from sqlalchemy import select
 
 from config import get_settings
-from db.models import Event, WebinarRegistration
+from db.models import Event, Lead, WebinarRegistration
 from db.session import SessionLocal
 from keyboards.inline import webinar_reminder_kb
 from texts import webinar as texts
@@ -67,6 +67,13 @@ def webinar_key() -> str:
 def stage_time(delta: timedelta) -> datetime:
     """Момент касания «за delta до эфира», в UTC."""
     return (webinar_at() - delta).astimezone(timezone.utc)
+
+
+def human_date() -> str:
+    """«27 августа» — короткая форма для CTA и меню. Тоже из WEBINAR_AT:
+    дата эфира не должна быть вбита руками ни в одном тексте."""
+    msk = webinar_at().astimezone(MSK)
+    return f"{msk.day} {_MONTHS_RU[msk.month - 1]}"
 
 
 def human_when() -> str:
@@ -134,6 +141,18 @@ async def reminder_sweep(bot: Bot) -> None:
     now = datetime.now(timezone.utc)
 
     async with SessionLocal() as session:
+        # Отписавшийся через /stop (или заблокировавший бота) не должен
+        # получать напоминания. Условие через NOT EXISTS, а не JOIN: у
+        # регистрации может не быть строки в leads, и терять её нельзя —
+        # молчим только когда лид есть и явно отписан.
+        unsubscribed = (
+            select(Lead.id)
+            .where(
+                Lead.telegram_id == WebinarRegistration.telegram_id,
+                Lead.is_subscribed.is_(False),
+            )
+            .exists()
+        )
         result = await session.execute(
             select(WebinarRegistration).where(
                 WebinarRegistration.is_active.is_(True),
@@ -141,6 +160,7 @@ async def reminder_sweep(bot: Bot) -> None:
                 WebinarRegistration.next_reminder_stage != STAGE_DONE,
                 WebinarRegistration.next_reminder_at.is_not(None),
                 WebinarRegistration.next_reminder_at <= now,
+                ~unsubscribed,
             )
         )
         registrations = list(result.scalars().all())
