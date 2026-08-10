@@ -10,7 +10,7 @@ from sqlalchemy import select
 from db.models import Event, Lead
 from db.session import get_session
 from keyboards.inline import DiagAnswer, q1_kb, q2_kb, q3_kb
-from services.funnel import Segment, calc_segment, compute_first_touch_at
+from services.funnel import Segment, calc_segment, compute_first_touch_at, render
 from texts import messages, prompts
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ async def on_q3(call: CallbackQuery, callback_data: DiagAnswer, state: FSMContex
         )
 
     # 1) шапка результата + плашка про подарок
-    await call.message.answer(messages.RESULT_HEADER[segment])
+    await call.message.answer(render(messages.RESULT_HEADER[segment]))
 
     # 2) 4 промпта по сегменту, каждый отдельным сообщением (title + <pre>body</pre>)
     for prompt in prompts.by_segment(segment):

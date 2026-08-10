@@ -30,6 +30,7 @@ from config import get_settings
 from db.models import Event, Lead, WebinarRegistration
 from db.session import SessionLocal
 from keyboards.inline import webinar_reminder_kb
+from services import dates
 from texts import webinar as texts
 
 logger = logging.getLogger(__name__)
@@ -43,12 +44,6 @@ STAGES: list[tuple[int, timedelta, str, bool]] = [
     (3, timedelta(hours=1), texts.REMINDER_1H, True),
 ]
 STAGE_DONE = 99
-
-_MONTHS_RU = (
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
-)
-_WEEKDAYS_RU = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
 
 MSK = timezone(timedelta(hours=3))
 
@@ -72,8 +67,7 @@ def stage_time(delta: timedelta) -> datetime:
 def human_date() -> str:
     """«27 августа» — короткая форма для CTA и меню. Тоже из WEBINAR_AT:
     дата эфира не должна быть вбита руками ни в одном тексте."""
-    msk = webinar_at().astimezone(MSK)
-    return f"{msk.day} {_MONTHS_RU[msk.month - 1]}"
+    return dates.human_date(webinar_at().astimezone(MSK).date())
 
 
 def human_when() -> str:
@@ -85,7 +79,7 @@ def human_when() -> str:
     city = settings.timezone.split("/")[-1].replace("_", " ")
     city_ru = {"Almaty": "Алматы", "Tashkent": "Ташкент", "Bishkek": "Бишкек"}.get(city, city)
     return (
-        f"{_WEEKDAYS_RU[msk.weekday()]} {msk.day} {_MONTHS_RU[msk.month - 1]}, "
+        f"{dates.WEEKDAYS_RU[msk.weekday()]} {dates.human_date(msk.date())}, "
         f"{msk:%H:%M} МСК / {local:%H:%M} {city_ru}"
     )
 

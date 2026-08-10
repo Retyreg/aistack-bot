@@ -23,6 +23,10 @@ alembic upgrade head
 локальной базе из `docker-compose.yml` (дефолт) или подставь свою через
 `TEST_DATABASE_URL`. На прод-базу не наводить.
 
+База должна быть в **UTF8** (`postgres:16-alpine` из compose — по умолчанию
+да). На кластере в SQL_ASCII `test_audit.py` падает на кириллице в JSONB —
+это про кодировку базы, а не про код.
+
 Между прогонами чистить:
 
 ```bash

@@ -1,7 +1,10 @@
-"""Броадкасты по абсолютным датам (SPEC §8.2):
-- 2026-06-09 19:00 local — push_earlybird_closing (EB закрывается завтра)
-- 2026-06-11 12:00 local — push_post_earlybird (ре-энгейдж после дедлайна)
-- 2026-06-23 19:00 local — push_last_call (финальный заход до старта)
+"""Броадкасты по абсолютным датам (SPEC §8.2). Даты не зашиты — считаются
+от EARLYBIRD_DEADLINE/COURSE_START в register_broadcasts:
+- EB−1 день, 19:00 local — push_earlybird_closing (EB закрывается завтра)
+- EB+1 день, 12:00 local — push_post_earlybird (ре-энгейдж после дедлайна)
+- старт−2 дня, 19:00 local — push_last_call (финальный заход до старта)
+
+Для сентябрьского потока это 02.09, 04.09 и 08.09.
 
 Идемпотентность: per-lead per-kind, 24-часовое окно. Повторное срабатывание
 job'а (рестарт бота в окне misfire) не приводит к дублю — те, кому уже
@@ -26,6 +29,7 @@ from config import get_settings
 from db.models import Event, Lead
 from db.session import SessionLocal
 from keyboards.inline import book_now_self_eb_kb, offer_kb
+from services.funnel import render
 from texts import messages
 
 logger = logging.getLogger(__name__)
@@ -116,7 +120,7 @@ async def push_earlybird_closing(bot: Bot) -> None:
     await _broadcast(
         bot,
         "earlybird_closing",
-        messages.PUSH_EARLYBIRD_CLOSING,
+        render(messages.PUSH_EARLYBIRD_CLOSING),
         book_now_self_eb_kb(),
     )
 
@@ -125,7 +129,7 @@ async def push_post_earlybird(bot: Bot) -> None:
     await _broadcast(
         bot,
         "post_earlybird",
-        messages.PUSH_POST_EARLYBIRD,
+        render(messages.PUSH_POST_EARLYBIRD),
         offer_kb(early_bird_active=False),
     )
 
@@ -134,7 +138,7 @@ async def push_last_call(bot: Bot) -> None:
     await _broadcast(
         bot,
         "last_call",
-        messages.PUSH_LAST_CALL,
+        render(messages.PUSH_LAST_CALL),
         offer_kb(early_bird_active=False),
     )
 
