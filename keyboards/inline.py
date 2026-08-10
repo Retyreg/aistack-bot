@@ -2,7 +2,7 @@ from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from config import get_settings
+from config import get_settings, price_params
 from texts import audit as audit_texts
 from texts import messages
 from texts import webinar as webinar_texts
@@ -139,12 +139,18 @@ def q3_kb() -> InlineKeyboardMarkup:
     return _question_kb(3, messages.Q3_OPTIONS)
 
 
+def tariff_label(key: str) -> str:
+    """Ярлык тарифа с подставленной ценой из конфига."""
+    return messages.TARIFF_LABELS[key].format(**price_params())
+
+
 def book_now_self_eb_kb() -> InlineKeyboardMarkup:
-    """Одна кнопка 'Забронировать за $200' → TariffChoice(self), для пуша 09.06."""
+    """Одна кнопка «Забронировать за <EB-цену>» → TariffChoice(self),
+    для пуша накануне дедлайна ранней цены."""
     builder = InlineKeyboardBuilder()
     builder.add(
         InlineKeyboardButton(
-            text=messages.PUSH_EARLYBIRD_BUTTON,
+            text=messages.PUSH_EARLYBIRD_BUTTON.format(**price_params()),
             callback_data=TariffChoice(code="self").pack(),
         )
     )
@@ -154,23 +160,12 @@ def book_now_self_eb_kb() -> InlineKeyboardMarkup:
 def offer_kb(early_bird_active: bool) -> InlineKeyboardMarkup:
     """4 кнопки: 3 тарифа + 'Остался вопрос'."""
     builder = InlineKeyboardBuilder()
-    self_label = (
-        messages.TARIFF_LABELS["self_eb"] if early_bird_active else messages.TARIFF_LABELS["self_regular"]
-    )
+    self_label = tariff_label("self_eb" if early_bird_active else "self_regular")
     builder.row(InlineKeyboardButton(text=self_label, callback_data=TariffChoice(code="self").pack()))
-    builder.row(
-        InlineKeyboardButton(
-            text=messages.TARIFF_LABELS["supported"], callback_data=TariffChoice(code="supported").pack()
+    for code in ("supported", "personal", "ask"):
+        builder.row(
+            InlineKeyboardButton(
+                text=tariff_label(code), callback_data=TariffChoice(code=code).pack()
+            )
         )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text=messages.TARIFF_LABELS["personal"], callback_data=TariffChoice(code="personal").pack()
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text=messages.TARIFF_LABELS["ask"], callback_data=TariffChoice(code="ask").pack()
-        )
-    )
     return builder.as_markup()

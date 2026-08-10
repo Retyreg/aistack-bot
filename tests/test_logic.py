@@ -226,5 +226,58 @@ for jid, want in expected_dates.items():
     got = jobs.get(jid)
     check(f"{jid} на {want}", got is not None and got.date().isoformat() == want, got)
 
+# 13. Прайс тоже приезжает из конфига
+from config import price_params
+from keyboards.inline import offer_kb, tariff_label
+
+pp = price_params()
+check("price_params отдаёт суммы со знаком", pp["price_self_eb"] == "$200", pp)
+check("места тоже из конфига", pp["eb_seats"] == "20" and pp["personal_seats"] == "5", pp)
+
+# Тарифные суммы не должны быть вбиты в шаблоны. Проверяем адресно: в
+# WARMING_1 есть «~$300/мес на подписках» — это стоимость AI-подписок,
+# а не тариф, и трогать её нельзя.
+PRICED = ("OFFER_TEMPLATE", "OFFER_EB_WARNING", "PUSH_EARLYBIRD_CLOSING",
+          "PUSH_EARLYBIRD_BUTTON", "PUSH_POST_EARLYBIRD", "PUSH_LAST_CALL",
+          "PERSONAL_CALL_INVITE", "ADMIN_PERSONAL_HOT_LEAD")
+TARIFF_AMOUNTS = ("$200", "$300", "$500", "$900")
+for nm in PRICED:
+    raw = getattr(mt, nm)
+    hit = [a for a in TARIFF_AMOUNTS if a in raw]
+    check(f"{nm} без вбитой цены", not hit, hit)
+for key, raw in mt.TARIFF_LABELS.items():
+    hit = [a for a in TARIFF_AMOUNTS if a in raw]
+    check(f"TARIFF_LABELS[{key}] без вбитой цены", not hit, hit)
+check("рыночные цифры в прогреве не тронуты", "~$300/мес" in mt.WARMING_1)
+
+# Ярлыки и кнопки рендерятся
+check("ярлык EB-тарифа", tariff_label("self_eb") == "Самостоятельный $200", tariff_label("self_eb"))
+check("ярлык обычного", tariff_label("self_regular") == "Самостоятельный $300")
+check("ярлык без цены не ломается", tariff_label("ask") == "Остался вопрос")
+eb_labels = [b.text for row in offer_kb(early_bird_active=True).inline_keyboard for b in row]
+reg_labels = [b.text for row in offer_kb(early_bird_active=False).inline_keyboard for b in row]
+check("клавиатура EB: $200", "Самостоятельный $200" in eb_labels, eb_labels)
+check("клавиатура после EB: $300", "Самостоятельный $300" in reg_labels, reg_labels)
+
+# Смена прайса меняет ВСЁ, без правки текстов
+os.environ["PRICE_SELF_EB"] = "250"
+os.environ["PRICE_SUPPORTED"] = "600"
+os.environ["EB_SEATS"] = "15"
+get_settings.cache_clear()
+try:
+    new_offer, kb = funnel.render_offer(datetime(2026, 9, 1, tzinfo=timezone.utc))
+    new_labels = [b.text for row in kb.inline_keyboard for b in row]
+    check("смена PRICE_SELF_EB видна в оффере", "$250" in new_offer and "$200" not in new_offer)
+    check("смена PRICE_SUPPORTED видна в оффере", "$600" in new_offer)
+    check("смена EB_SEATS видна в плашке", "первые 15 мест" in new_offer, new_offer[-260:])
+    check("смена цены видна на кнопке", "Самостоятельный $250" in new_labels, new_labels)
+    check("смена цены видна в пуше",
+          "$250" in funnel.render(mt.PUSH_EARLYBIRD_CLOSING))
+finally:
+    for k in ("PRICE_SELF_EB", "PRICE_SUPPORTED", "EB_SEATS"):
+        os.environ.pop(k, None)
+    get_settings.cache_clear()
+check("после отката прайс прежний", price_params()["price_self_eb"] == "$200")
+
 print("\n" + ("ВСЁ ЗЕЛЁНОЕ" if not failures else f"ПРОВАЛЫ: {failures}"))
 sys.exit(1 if failures else 0)

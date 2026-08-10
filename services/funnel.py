@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from aiogram.types import InlineKeyboardMarkup
 
-from config import get_settings
+from config import get_settings, price_params
 from services.dates import human_date
 from texts import messages
 
@@ -94,13 +94,13 @@ def course_dates() -> dict[str, str]:
 
 
 def render(template: str, **extra: str) -> str:
-    """Подставить даты потока (и что передали сверху) в шаблон текста.
+    """Подставить даты и прайс потока (и что передали сверху) в шаблон.
 
-    Единственный способ, которым даты попадают в user-facing строки. Если
-    захочется вбить «10 сентября» руками — нельзя: следующий набор про это
+    Единственный способ, которым даты и цены попадают в user-facing строки.
+    Вбивать «10 сентября» или «$200» руками нельзя: следующий набор про это
     забудут, как забыли про июньский.
     """
-    return template.format(**course_dates(), **extra)
+    return template.format(**course_dates(), **price_params(), **extra)
 
 
 def is_early_bird_active(now: datetime | None = None) -> bool:
@@ -113,7 +113,8 @@ def render_offer(now: datetime | None = None) -> tuple[str, InlineKeyboardMarkup
     from keyboards.inline import offer_kb  # локальный импорт от циклов
 
     eb = is_early_bird_active(now)
-    self_price = "$200" if eb else "$300"
+    prices = price_params()
+    self_price = prices["price_self_eb"] if eb else prices["price_self_regular"]
     eb_warning = render(messages.OFFER_EB_WARNING) if eb else ""
     text = render(messages.OFFER_TEMPLATE, self_price=self_price, eb_warning=eb_warning)
     return text, offer_kb(early_bird_active=eb)
