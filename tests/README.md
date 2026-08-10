@@ -8,6 +8,7 @@
 | `test_logic.py` | сборка роутеров, арифметика стадий напоминаний, клэмпинг при поздней регистрации, форматирование текстов, отсутствие вбитых руками дат | нет |
 | `test_db.py` | `/sources` по периодам и null-меткам, полная цепочка напоминаний, протухшие касания, `/stop`, `/webinars` | да |
 | `test_audit.py` | аудит от падения LLM до доставки вердикта (как есть и после правки) | да |
+| `test_llm_retry.py` | повтор на пустом `content`, отсутствие повтора на HTTP-ошибке | нет |
 
 ## Запуск
 
@@ -17,6 +18,7 @@ alembic upgrade head
 .venv/bin/python tests/test_logic.py
 .venv/bin/python tests/test_db.py
 .venv/bin/python tests/test_audit.py
+.venv/bin/python tests/test_llm_retry.py
 ```
 
 `test_db.py` и `test_audit.py` **пишут в БД** из `DATABASE_URL`. Гоняй их на

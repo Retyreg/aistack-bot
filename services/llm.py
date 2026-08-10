@@ -29,8 +29,13 @@ class LLMError(RuntimeError):
 async def complete(system_prompt: str, user_prompt: str, *, max_tokens: int = 1200) -> str:
     """Вернуть текст ответа модели или бросить LLMError.
 
-    Никаких ретраев: аудит не в горячем пути, а админ и так получит сырые
-    ответы при любой ошибке — второй заход только задержал бы уведомление.
+    Один повтор — и только на пустой content. Это не гипотетика: на проде
+    10.08 из трёх пробных вызовов один вернул HTTP 200 с ``content: null``
+    (finish_reason=stop, никакой ошибки), два следующих отработали штатно.
+    Без повтора такой аудит уходил бы админу писать руками на ровном месте.
+
+    На сетевых ошибках и не-200 повторов нет: там либо лежит провайдер, либо
+    кончились кредиты, и второй заход только задержит уведомление админу.
     """
     settings = get_settings()
     if not settings.openrouter_api_key:
@@ -54,13 +59,28 @@ async def complete(system_prompt: str, user_prompt: str, *, max_tokens: int = 12
     }
     timeout = aiohttp.ClientTimeout(total=settings.openrouter_timeout_seconds)
 
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for attempt in (1, 2):
+            text = await _one_call(session, payload, headers)
+            if text:
+                return text
+            logger.warning(
+                "OpenRouter вернул пустой content (попытка %s/2, модель %s)",
+                attempt,
+                settings.openrouter_model,
+            )
+
+    raise LLMError("OpenRouter дважды вернул пустой content")
+
+
+async def _one_call(session: aiohttp.ClientSession, payload: dict, headers: dict) -> str:
+    """Один POST. Возвращает текст или пустую строку; на ошибках — LLMError."""
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(API_URL, json=payload, headers=headers) as resp:
-                body = await resp.text()
-                if resp.status != 200:
-                    raise LLMError(f"OpenRouter HTTP {resp.status}: {body[:400]}")
-                data = await resp.json()
+        async with session.post(API_URL, json=payload, headers=headers) as resp:
+            body = await resp.text()
+            if resp.status != 200:
+                raise LLMError(f"OpenRouter HTTP {resp.status}: {body[:400]}")
+            data = await resp.json()
     except LLMError:
         raise
     except Exception as exc:  # сеть, таймаут, кривой JSON
@@ -71,7 +91,4 @@ async def complete(system_prompt: str, user_prompt: str, *, max_tokens: int = 12
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMError(f"Неожиданный ответ OpenRouter: {str(data)[:400]}") from exc
 
-    text = (text or "").strip()
-    if not text:
-        raise LLMError("OpenRouter вернул пустой content")
-    return text
+    return (text or "").strip()
