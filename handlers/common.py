@@ -8,6 +8,8 @@ from sqlalchemy import select
 
 from db.models import Event, Lead
 from db.session import get_session
+from handlers.audit import begin_with_idea
+from keyboards.inline import audit_offer_kb
 from texts import messages
 
 logger = logging.getLogger(__name__)
@@ -33,10 +35,23 @@ async def cmd_stop(message: Message, state: FSMContext) -> None:
     await message.answer(messages.STOP_OK)
 
 
+# Столько символов уже похоже на описание идеи, а не на «привет».
+IDEA_LIKE_LEN = 40
+
+
 @router.message()
-async def fallback(message: Message) -> None:
-    """Мягкий ответ на непонятный ввод вне FSM."""
-    await message.answer(messages.FALLBACK)
+async def fallback(message: Message, state: FSMContext) -> None:
+    """Свободный текст вне FSM.
+
+    Развёрнутое сообщение трактуем как идею и сразу заводим аудит — по ТЗ
+    человек может «написать свою идею первым сообщением». Короткое — обычный
+    мягкий фоллбек с предложением разобрать идею.
+    """
+    if message.from_user is not None and message.text and len(message.text.strip()) >= IDEA_LIKE_LEN:
+        await begin_with_idea(message, message.from_user.id, state, message.text.strip())
+        return
+
+    await message.answer(messages.FALLBACK, reply_markup=audit_offer_kb())
 
 
 @router.callback_query()

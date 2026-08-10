@@ -23,6 +23,7 @@ from db.models import Event, Lead
 from db.session import SessionLocal
 from services.broadcasts import register_broadcasts
 from services.funnel import DripMode, drip_mode, next_interval, render_offer
+from services.webinar import reminder_sweep
 from texts import messages
 
 logger = logging.getLogger(__name__)
@@ -139,7 +140,24 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    # Напоминания о вебинаре — ОТДЕЛЬНЫЙ job, а не ветка в drip_sweep:
+    # тот выходит по guard'у course_start (на проде дата уже в прошлом) и
+    # никогда бы их не отправил. Тик чаще, чем у прогрева: касание «за час»
+    # с 15-минутным шагом промахнулось бы мимо своего окна.
+    scheduler.add_job(
+        reminder_sweep,
+        "interval",
+        minutes=5,
+        kwargs={"bot": bot},
+        id="webinar_reminder_sweep",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     register_broadcasts(scheduler, bot)
     scheduler.start()
-    logger.info("Scheduler started: drip_sweep every %s min", settings.drip_interval_minutes)
+    logger.info(
+        "Scheduler started: drip_sweep every %s min, webinar_reminder_sweep every 5 min",
+        settings.drip_interval_minutes,
+    )
     return scheduler

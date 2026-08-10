@@ -1,8 +1,11 @@
-"""Агрегаты для /stats и /lead."""
+"""Агрегаты для /stats, /lead и /sources."""
+
+import html
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 
-from db.models import Event, Lead
+from db.models import AuditRequest, Event, Lead, WebinarRegistration
 from db.session import SessionLocal
 
 _STAGES = ("new", "diagnostic_done", "warming", "offered", "booked", "paid", "lost")
@@ -100,4 +103,103 @@ def format_stats(snap: dict) -> str:
         for src, cnt in snap["by_source"]:
             lines.append(f"  {src}: {cnt}")
 
+    return "\n".join(lines)
+
+
+# ─── /sources: стартов бота по источникам за период ────────────────────────
+#
+# Считаем по events, а НЕ по leads.source. Разница принципиальная:
+# leads.source — first-touch и навсегда (handlers/start.py пишет его только
+# если он ещё пустой), так что по нему нельзя ответить «сколько стартов с
+# li за прошлую неделю». А events пишет каждый /start вместе с тем
+# start-параметром, с которым человек пришёл именно в этот раз.
+#
+# «Стартов» — это события. «Людей» — уникальные telegram_id: один человек
+# может нажать /start пять раз, и для оценки посева важны обе цифры.
+
+NO_SOURCE_LABEL = "(без метки · direct)"
+
+
+async def sources_report(days: int) -> dict:
+    """Разбивка стартов бота по start-параметру за последние ``days`` суток."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    source_expr = Event.meta["source"].astext
+
+    async with SessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(
+                    source_expr.label("source"),
+                    func.count(Event.id).label("starts"),
+                    func.count(func.distinct(Event.telegram_id)).label("people"),
+                )
+                .where(Event.event_type == "start", Event.created_at >= since)
+                .group_by(source_expr)
+                .order_by(func.count(Event.id).desc())
+            )
+        ).all()
+
+        # Что источники дали дальше по воронке — по тем же меткам.
+        audits = dict(
+            (
+                await session.execute(
+                    select(AuditRequest.source, func.count(AuditRequest.id))
+                    .where(AuditRequest.created_at >= since)
+                    .group_by(AuditRequest.source)
+                )
+            ).all()
+        )
+        regs = dict(
+            (
+                await session.execute(
+                    select(WebinarRegistration.source, func.count(WebinarRegistration.id))
+                    .where(WebinarRegistration.created_at >= since)
+                    .group_by(WebinarRegistration.source)
+                )
+            ).all()
+        )
+
+    return {
+        "days": days,
+        "since": since,
+        "rows": [
+            {
+                "source": src,
+                "starts": starts,
+                "people": people,
+                "audits": audits.get(src, 0),
+                "regs": regs.get(src, 0),
+            }
+            for src, starts, people in rows
+        ],
+    }
+
+
+def format_sources(report: dict) -> str:
+    """HTML-таблица для /sources. Ничего не отбрасываем — все метки видны."""
+    rows = report["rows"]
+    lines = [
+        f"📈 <b>Старты бота по источникам</b> · за {report['days']} дн.",
+        f"<i>с {report['since']:%d.%m.%Y %H:%M} UTC</i>",
+    ]
+    if not rows:
+        lines.append("\nЗа период ни одного /start.")
+        return "\n".join(lines)
+
+    total_starts = sum(r["starts"] for r in rows)
+    total_people = sum(r["people"] for r in rows)
+
+    lines.append("\n<code>источник · стартов · людей · аудитов · вебинар</code>")
+    for row in rows:
+        label = html.escape(row["source"]) if row["source"] else NO_SOURCE_LABEL
+        lines.append(
+            f"  <b>{label}</b> · {row['starts']} · {row['people']} · "
+            f"{row['audits']} · {row['regs']}"
+        )
+
+    lines.append(f"\n<b>Итого:</b> {total_starts} стартов, {total_people} человек")
+    lines.append(
+        "\n<i>«Стартов» — нажатий /start (один человек может несколько раз). "
+        "«Людей» — уникальных. Аудиты и вебинар — по метке того же лида.</i>"
+    )
     return "\n".join(lines)

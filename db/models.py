@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Index, SmallInteger, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Index, SmallInteger, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -64,4 +64,89 @@ class Event(Base):
     meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        # /sources: group by meta->>'source' за период (см. analytics.sources_report)
+        Index("ix_events_type_created", "event_type", "created_at"),
+    )
+
+
+class AuditRequest(Base):
+    """Одна заявка на «Аудит идеи»: ответы юзера → AI-черновик → вердикт.
+
+    Статусы:
+      collecting        — идёт опрос, ответы копятся
+      pending_approval  — черновик готов и улетел админу, ждём решения
+      sent              — вердикт доставлен юзеру (as-is или отредактированный)
+      manual            — админ забрал в ручной ответ («отвечу позже»)
+      failed            — LLM не ответил; ответы у админа, черновика нет
+    """
+
+    __tablename__ = "audit_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    idea: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # {"q1": "...", ..., "q5": "..."} — ключи совпадают с texts.audit.QUESTIONS
+    answers: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+    draft_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    final_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String, nullable=False, default="collecting", server_default="collecting"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    drafted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_audit_status", "status"),)
+
+
+class WebinarRegistration(Base):
+    """Регистрация на вебинар + позиция в цепочке напоминаний.
+
+    Расписание живёт в БД (next_reminder_stage/next_reminder_at), а не в памяти
+    процесса — тот же приём, что у Lead.next_touch/next_action_at. Рестарт бота
+    не теряет цепочку; сдвиг стадии коммитится сразу после отправки.
+    Стадии — services.webinar.ReminderStage.
+    """
+
+    __tablename__ = "webinar_registrations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    # ключ вебинара ('2026-08-27') — чтобы следующий эфир не смешался с этим
+    webinar_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
+
+    next_reminder_stage: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=1, server_default="1"
+    )
+    next_reminder_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_reminder_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_webinar_reg_unique", "telegram_id", "webinar_key", unique=True),
+        Index("ix_webinar_reg_due", "next_reminder_at"),
     )

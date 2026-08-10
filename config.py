@@ -1,9 +1,13 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Annotated
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Внутри тела Settings имя ``timezone`` занято полем настроек, поэтому
+# tzinfo для МСК считаем здесь, снаружи класса.
+MSK = timezone(timedelta(hours=3))
 
 
 class Settings(BaseSettings):
@@ -34,6 +38,33 @@ class Settings(BaseSettings):
     # Дефолт-онли: НЕ задаём в .env — pydantic-settings попытается JSON-парсить
     # complex-type поле и упадёт на строке "a,b" (как admin_ids, но без NoDecode).
     webinar_leadmagnet_sources: set[str] = {"src_webinar", "src_ig", "src_tt", "src_shorts"}
+
+    # ─── Вебинар 27.08 + цепочка напоминаний ──────────────────────────────
+    # ЕДИНСТВЕННЫЙ источник правды по времени: все четыре напоминания
+    # считаются от него (services.webinar.stage_time). Обязательно с offset —
+    # +03:00 это МСК; 18:00 МСК = 20:00 Алматы = 15:00 UTC.
+    webinar_at: datetime = datetime(2026, 8, 27, 18, 0, tzinfo=MSK)
+    webinar_title: str = "Запуск продукта с AI-командой"
+    # Ссылка на комнату; пустая — кнопку «Подключиться» не рисуем.
+    webinar_join_url: str = ""
+
+    # ─── LLM для черновика вердикта (OpenRouter) ──────────────────────────
+    # Один вызов на аудит, качество важнее цены → модель сильная, id в env.
+    # Без ключа аудит не падает: админу уедут сырые ответы (см. services/llm.py).
+    openrouter_api_key: str = ""
+    openrouter_model: str = "anthropic/claude-sonnet-5"
+    openrouter_timeout_seconds: int = 90
+
+    @field_validator("webinar_at")
+    @classmethod
+    def _webinar_at_aware(cls, v: datetime) -> datetime:
+        """Наивный WEBINAR_AT ломает все сравнения в sweep'е — трактуем как МСК.
+
+        Пиши в .env с offset: ``WEBINAR_AT=2026-08-27T18:00:00+03:00``.
+        """
+        if v.tzinfo is None:
+            return v.replace(tzinfo=MSK)
+        return v
 
     @field_validator("admin_ids", mode="before")
     @classmethod
