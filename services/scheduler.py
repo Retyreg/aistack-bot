@@ -7,7 +7,8 @@ drip_sweep: подбирает warming-лидов с next_action_at <= now() и 
 успешного send_message; этого избегаем коммитом сразу после send в одной
 транзакции на лида.
 
-Броадкасты по абсолютным датам (09.06, 11.06, 23.06) — на шаге 5.
+Броадкасты по абсолютным датам считаются от EARLYBIRD_DEADLINE/COURSE_START —
+см. services/broadcasts.py::register_broadcasts.
 """
 
 import logging
@@ -22,7 +23,8 @@ from config import get_settings
 from db.models import Event, Lead
 from db.session import SessionLocal
 from services.broadcasts import register_broadcasts
-from services.funnel import DripMode, drip_mode, next_interval, render_offer
+from services.funnel import DripMode, drip_mode, next_interval, render, render_offer
+from services.webinar import reminder_sweep
 from texts import messages
 
 logger = logging.getLogger(__name__)
@@ -75,16 +77,16 @@ async def _send_touch(bot: Bot, session, lead: Lead, now: datetime) -> None:
         if n == 1:
             if mode == "ultra":
                 # склеенное касание 1+2+3 → потом сразу оффер
-                await bot.send_message(lead.telegram_id, messages.WARMING_COMBINED)
+                await bot.send_message(lead.telegram_id, render(messages.WARMING_COMBINED))
                 lead.next_touch = 4
             else:
-                await bot.send_message(lead.telegram_id, messages.WARMING_1)
+                await bot.send_message(lead.telegram_id, render(messages.WARMING_1))
                 lead.next_touch = 2
         elif n == 2:
-            await bot.send_message(lead.telegram_id, messages.WARMING_2)
+            await bot.send_message(lead.telegram_id, render(messages.WARMING_2))
             lead.next_touch = 3
         elif n == 3:
-            await bot.send_message(lead.telegram_id, messages.WARMING_3)
+            await bot.send_message(lead.telegram_id, render(messages.WARMING_3))
             lead.next_touch = 4
         elif n == 4:
             text, kb = render_offer(now)
@@ -139,7 +141,24 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
         replace_existing=True,
         misfire_grace_time=3600,
     )
+    # Напоминания о вебинаре — ОТДЕЛЬНЫЙ job, а не ветка в drip_sweep:
+    # тот выходит по guard'у course_start (на проде дата уже в прошлом) и
+    # никогда бы их не отправил. Тик чаще, чем у прогрева: касание «за час»
+    # с 15-минутным шагом промахнулось бы мимо своего окна.
+    scheduler.add_job(
+        reminder_sweep,
+        "interval",
+        minutes=5,
+        kwargs={"bot": bot},
+        id="webinar_reminder_sweep",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+
     register_broadcasts(scheduler, bot)
     scheduler.start()
-    logger.info("Scheduler started: drip_sweep every %s min", settings.drip_interval_minutes)
+    logger.info(
+        "Scheduler started: drip_sweep every %s min, webinar_reminder_sweep every 5 min",
+        settings.drip_interval_minutes,
+    )
     return scheduler

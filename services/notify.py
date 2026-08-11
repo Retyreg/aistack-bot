@@ -10,12 +10,16 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 
 
-async def send_admin(bot: Bot, text: str) -> None:
-    """Шлёт сообщение каждому ADMIN_ID. Глотает блокировки/ошибки."""
+async def send_admin(bot: Bot, text: str, reply_markup=None) -> None:
+    """Шлёт сообщение каждому ADMIN_ID. Глотает блокировки/ошибки.
+
+    ``reply_markup`` нужен карточке аудита: кнопки одобрения приходят каждому
+    админу, нажать может любой — заявка защищена статусом, не адресатом.
+    """
     settings = get_settings()
     for admin_id in settings.admin_ids:
         try:
-            await bot.send_message(admin_id, text)
+            await bot.send_message(admin_id, text, reply_markup=reply_markup)
         except TelegramForbiddenError:
             logger.warning("Admin %s blocked the bot", admin_id)
         except Exception as exc:

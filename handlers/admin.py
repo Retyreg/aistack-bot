@@ -28,7 +28,14 @@ from sqlalchemy import func, or_, select
 from config import get_settings
 from db.models import Event, Lead
 from db.session import SessionLocal
-from services.analytics import format_stats, funnel_snapshot
+from services.analytics import (
+    format_sources,
+    format_stats,
+    format_webinar,
+    funnel_snapshot,
+    sources_report,
+    webinar_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
@@ -79,6 +86,42 @@ async def _lookup_lead(arg: str) -> Lead | None:
 async def cmd_stats(message: Message) -> None:
     snap = await funnel_snapshot()
     await message.answer(format_stats(snap))
+
+
+# ─── /sources ──────────────────────────────────────────────────────────────
+
+DEFAULT_SOURCES_DAYS = 7
+MAX_SOURCES_DAYS = 365
+
+
+@router.message(Command("sources"))
+async def cmd_sources(message: Message, command: CommandObject) -> None:
+    """Старты бота по меткам источников за период. Отдельно от /stats:
+    у /stats свой смысл (срез воронки), ломать его не надо."""
+    days = DEFAULT_SOURCES_DAYS
+    if command.args:
+        arg = command.args.strip()
+        if not arg.isdigit() or not 1 <= int(arg) <= MAX_SOURCES_DAYS:
+            await message.answer(
+                f"Использование: <code>/sources [дней]</code> "
+                f"(1–{MAX_SOURCES_DAYS}, по умолчанию {DEFAULT_SOURCES_DAYS})"
+            )
+            return
+        days = int(arg)
+
+    await message.answer(format_sources(await sources_report(days)))
+
+
+# ─── /webinars ─────────────────────────────────────────────────────────────
+
+@router.message(Command("webinars"))
+async def cmd_webinars(message: Message) -> None:
+    """Кто записан на эфир и когда кому уйдёт следующее напоминание.
+
+    Это тот самый предполётный чек «цепочка реально выстрелит?» — смотреть
+    за пару дней до эфира.
+    """
+    await message.answer(format_webinar(await webinar_snapshot()))
 
 
 # ─── /lead ─────────────────────────────────────────────────────────────────

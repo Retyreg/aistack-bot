@@ -1,9 +1,13 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Annotated
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Внутри тела Settings имя ``timezone`` занято полем настроек, поэтому
+# tzinfo для МСК считаем здесь, снаружи класса.
+MSK = timezone(timedelta(hours=3))
 
 
 class Settings(BaseSettings):
@@ -35,6 +39,44 @@ class Settings(BaseSettings):
     # complex-type поле и упадёт на строке "a,b" (как admin_ids, но без NoDecode).
     webinar_leadmagnet_sources: set[str] = {"src_webinar", "src_ig", "src_tt", "src_shorts"}
 
+    # ─── Вебинар 27.08 + цепочка напоминаний ──────────────────────────────
+    # ЕДИНСТВЕННЫЙ источник правды по времени: все четыре напоминания
+    # считаются от него (services.webinar.stage_time). Обязательно с offset —
+    # +03:00 это МСК; 18:00 МСК = 20:00 Алматы = 15:00 UTC.
+    webinar_at: datetime = datetime(2026, 8, 27, 18, 0, tzinfo=MSK)
+    webinar_title: str = "Запуск продукта с AI-командой"
+    # Ссылка на комнату; пустая — кнопку «Подключиться» не рисуем.
+    webinar_join_url: str = ""
+
+    # ─── Прайс потока ─────────────────────────────────────────────────────
+    # Суммы в долларах, целыми. В текстах — только плейсхолдеры
+    # ({price_self_eb} и т.д.), см. config.price_params и funnel.render.
+    price_self_eb: int = 200
+    price_self_regular: int = 300
+    price_supported: int = 500
+    price_personal: int = 900
+    # Дефицит: «первые 20 мест» по ранней цене и 5 мест на персональном.
+    eb_seats: int = 20
+    personal_seats: int = 5
+
+    # ─── LLM для черновика вердикта (OpenRouter) ──────────────────────────
+    # Один вызов на аудит, качество важнее цены → модель сильная, id в env.
+    # Без ключа аудит не падает: админу уедут сырые ответы (см. services/llm.py).
+    openrouter_api_key: str = ""
+    openrouter_model: str = "anthropic/claude-sonnet-5"
+    openrouter_timeout_seconds: int = 90
+
+    @field_validator("webinar_at")
+    @classmethod
+    def _webinar_at_aware(cls, v: datetime) -> datetime:
+        """Наивный WEBINAR_AT ломает все сравнения в sweep'е — трактуем как МСК.
+
+        Пиши в .env с offset: ``WEBINAR_AT=2026-08-27T18:00:00+03:00``.
+        """
+        if v.tzinfo is None:
+            return v.replace(tzinfo=MSK)
+        return v
+
     @field_validator("admin_ids", mode="before")
     @classmethod
     def _parse_admin_ids(cls, v: object) -> list[int]:
@@ -50,6 +92,23 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def price_params() -> dict[str, str]:
+    """Прайс для подстановки в тексты: {'price_self_eb': '$200', ...}.
+
+    Живёт в config, а не в services/, чтобы им могли пользоваться и тексты
+    воронки (через funnel.render), и клавиатуры — без циклических импортов.
+    """
+    s = get_settings()
+    return {
+        "price_self_eb": f"${s.price_self_eb}",
+        "price_self_regular": f"${s.price_self_regular}",
+        "price_supported": f"${s.price_supported}",
+        "price_personal": f"${s.price_personal}",
+        "eb_seats": str(s.eb_seats),
+        "personal_seats": str(s.personal_seats),
+    }
 
 
 def is_webinar_source(source: str | None) -> bool:

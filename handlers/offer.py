@@ -3,7 +3,7 @@
 - self / supported  → лог tariff_clicked, lead.tariff = code,
                       FSM → BookingFlow.waiting_for_contact, запрос контакта.
 - personal          → лог tariff_clicked, приглашение на 10-мин созвон,
-                      уведомление автора о горячем лиде ($900).
+                      уведомление автора о горячем лиде на персональном тарифе.
 - ask               → лог tariff_clicked(meta=ask), FSM → QuestionFlow,
                       ждём текст вопроса; пересылка → шаг booking.on_question.
 """
@@ -21,6 +21,7 @@ from db.models import Event, Lead
 from db.session import get_session
 from handlers.booking import BookingFlow, QuestionFlow
 from keyboards.inline import TariffChoice
+from services.funnel import render
 from services.notify import send_admin
 from texts import messages
 
@@ -73,9 +74,10 @@ async def on_tariff(
 
     elif code == "personal":
         await call.message.answer(
-            messages.PERSONAL_CALL_INVITE.format(author_contact=settings.author_contact)
+            render(messages.PERSONAL_CALL_INVITE, author_contact=settings.author_contact)
         )
-        admin_text = messages.ADMIN_PERSONAL_HOT_LEAD.format(
+        admin_text = render(
+            messages.ADMIN_PERSONAL_HOT_LEAD,
             username=f"@{html.escape(user.username)}" if user.username else "(нет username)",
             first_name=_safe(user.first_name),
             source=_safe(source),
