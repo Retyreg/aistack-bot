@@ -24,6 +24,7 @@ def check(label, cond, detail=""):
 
 
 async def main():
+    real_one_call = llm._one_call  # предыдущие сценарии его подменяют
     calls = {"n": 0}
 
     # 1. Пусто → повтор → текст
@@ -87,6 +88,52 @@ async def main():
         check("без ключа → LLMError", False, "исключения не было")
     except llm.LLMError as exc:
         check("без ключа → LLMError", "OPENROUTER_API_KEY" in str(exc), exc)
+
+
+    # 6. Обрезка по max_tokens логируется, но черновик не теряется
+    import logging
+
+    records = []
+
+    class Catcher(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    llm._one_call = real_one_call
+    llm.logger.addHandler(Catcher())
+    os.environ["OPENROUTER_API_KEY"] = "sk-or-v1-test"
+    get_settings.cache_clear()
+
+    class FakeResp:
+        status = 200
+
+        async def text(self):
+            return ""
+
+        async def json(self):
+            return {
+                "choices": [{"finish_reason": "length",
+                             "message": {"content": "вердикт обрезан на полусл"}}],
+                "usage": {"completion_tokens": 2400,
+                          "completion_tokens_details": {"reasoning_tokens": 300}},
+            }
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    class FakeSession:
+        def post(self, *a, **kw):
+            return FakeResp()
+
+    out = await llm._one_call(FakeSession(), {}, {})
+    check("обрезанный черновик всё равно возвращается", out.startswith("вердикт обрезан"), out)
+    errs = [r for r in records if r.levelno >= logging.ERROR and "max_tokens" in r.getMessage()]
+    check("обрезка попадает в лог как ERROR", len(errs) == 1, [r.getMessage()[:60] for r in records])
+
+    check("дефолтный лимит поднят до 2400", llm.DEFAULT_MAX_TOKENS == 2400, llm.DEFAULT_MAX_TOKENS)
 
     print("\n" + ("ВСЁ ЗЕЛЁНОЕ" if not failures else f"ПРОВАЛЫ: {failures}"))
     return 1 if failures else 0
