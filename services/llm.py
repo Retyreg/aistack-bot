@@ -26,7 +26,16 @@ class LLMError(RuntimeError):
     """Черновик не получен. Вызывающий обязан деградировать, а не падать."""
 
 
-async def complete(system_prompt: str, user_prompt: str, *, max_tokens: int = 1200) -> str:
+# Промпт просит вердикт не длиннее 1800 символов. В токенах это дороже, чем
+# кажется: на проде замерено ~1.26 символа на токен для русского в этом
+# контексте (в простом тексте бывает 2.6 — на длину промпта полагаться нельзя),
+# то есть 1800 символов ≈ 1450 токенов. Сверху reasoning, который считается
+# в те же completion_tokens и на замере съел 192. Отсюда запас до 2400:
+# со старыми 1200 вердикт обрывался на полуслове (finish_reason=length).
+DEFAULT_MAX_TOKENS = 2400
+
+
+async def complete(system_prompt: str, user_prompt: str, *, max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
     """Вернуть текст ответа модели или бросить LLMError.
 
     Один повтор — и только на пустой content. Это не гипотетика: на проде
@@ -87,8 +96,21 @@ async def _one_call(session: aiohttp.ClientSession, payload: dict, headers: dict
         raise LLMError(f"OpenRouter недоступен: {exc}") from exc
 
     try:
-        text = data["choices"][0]["message"]["content"]
+        choice = data["choices"][0]
+        text = choice["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMError(f"Неожиданный ответ OpenRouter: {str(data)[:400]}") from exc
+
+    # Обрезанный вердикт визуально похож на целый — админ может не заметить
+    # и отправить «как есть». Не роняем (черновик всё равно полезнее пустоты),
+    # но кричим в лог: значит, DEFAULT_MAX_TOKENS снова мал.
+    if choice.get("finish_reason") == "length":
+        usage = data.get("usage") or {}
+        logger.error(
+            "OpenRouter обрезал ответ по max_tokens (completion=%s, reasoning=%s) — "
+            "вердикт уйдёт админу неполным, подними DEFAULT_MAX_TOKENS",
+            usage.get("completion_tokens"),
+            (usage.get("completion_tokens_details") or {}).get("reasoning_tokens"),
+        )
 
     return (text or "").strip()
