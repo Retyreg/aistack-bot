@@ -4,6 +4,7 @@
 #
 # Секреты НЕ хардкодим — передаём при запуске:
 #   BOT_TOKEN=123:ABC ADMIN_IDS=12345678 bash bootstrap_new_server.sh
+# Пароль БД можно передать своим (DB_PASSWORD=...), иначе сгенерируется случайный.
 #
 # Что делает: пакеты + Docker (Postgres) + юзер deploy + git clone (public repo)
 #   + .env + venv + alembic upgrade + systemd-юнит + sudoers + запуск бота.
@@ -12,6 +13,10 @@ set -euo pipefail
 : "${BOT_TOKEN:?Передай BOT_TOKEN=... (токен у @BotFather)}"
 : "${ADMIN_IDS:?Передай ADMIN_IDS=... (твой telegram_id, узнать у @userinfobot)}"
 REPLAY_URL="${REPLAY_URL:-https://youtu.be/lsA4xftUMCk}"
+# Пароль БД: если не передан — генерируем случайный (32 буквенно-цифровых).
+# Только [A-Za-z0-9] — пароль уходит внутрь URL DATABASE_URL, спецсимволы
+# пришлось бы percent-кодировать.
+DB_PASSWORD="${DB_PASSWORD:-$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | cut -c1-32)}"
 
 APP_USER=deploy
 APP_HOME="/home/${APP_USER}"
@@ -55,7 +60,8 @@ echo "==> 5/9 .env (не перезатираю существующий)"
 if [ ! -f "${APP_DIR}/.env" ]; then
   cat > "${APP_DIR}/.env" <<EOF
 BOT_TOKEN=${BOT_TOKEN}
-DATABASE_URL=postgresql+asyncpg://aistack:aistack@localhost:5433/aistack
+POSTGRES_PASSWORD=${DB_PASSWORD}
+DATABASE_URL=postgresql+asyncpg://aistack:${DB_PASSWORD}@localhost:5433/aistack
 ADMIN_IDS=${ADMIN_IDS}
 TIMEZONE=Asia/Almaty
 EARLYBIRD_DEADLINE=2026-06-10
