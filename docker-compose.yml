@@ -4,10 +4,14 @@ services:
     container_name: aistack-bot-postgres
     environment:
       POSTGRES_USER: aistack
-      POSTGRES_PASSWORD: aistack
+      # Пароль берём из .env — compose подхватывает его из каталога проекта.
+      # .env не в git, поэтому переживает `git reset --hard` при деплое.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD не задан — добавь его в .env}
       POSTGRES_DB: aistack
     ports:
-      - "5433:5432"
+      # Только loopback. Наружу БД торчать не должна: бот ходит с хоста
+      # через 127.0.0.1:5433, снаружи доступа нет.
+      - "127.0.0.1:5433:5432"
     volumes:
       - aistack-bot-pg:/var/lib/postgresql/data
     restart: unless-stopped
