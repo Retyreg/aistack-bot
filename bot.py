@@ -14,7 +14,7 @@ from sqlalchemy import select
 from config import get_settings
 from db.models import Event, Lead
 from db.session import SessionLocal
-from handlers import admin, audit, audit_admin, booking, common, diagnostic, offer, start, webinar
+from handlers import admin, audit, audit_admin, booking, common, diagnostic, offer, promo, start, webinar
 from services.scheduler import start_scheduler
 from services.web import create_app as create_web_app
 
@@ -43,6 +43,7 @@ async def main() -> None:
     dp.include_router(admin.router)
     dp.include_router(audit_admin.router)
     dp.include_router(start.router)
+    dp.include_router(promo.router)
     dp.include_router(diagnostic.router)
     dp.include_router(audit.router)
     dp.include_router(webinar.router)

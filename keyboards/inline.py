@@ -3,6 +3,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import get_settings, price_params
+from services.promo import is_active as promo_is_active
 from texts import audit as audit_texts
 from texts import messages
 from texts import webinar as webinar_texts
@@ -39,6 +40,10 @@ def welcome_kb(*, webinar_open: bool = True) -> InlineKeyboardMarkup:
     «этот эфир уже прошёл».
     """
     builder = InlineKeyboardBuilder()
+    if promo_is_active():
+        builder.row(
+            InlineKeyboardButton(text="Скидка на онлайн-курс", callback_data="promo_open")
+        )
     builder.row(InlineKeyboardButton(text=audit_texts.AUDIT_BUTTON, callback_data="audit_start"))
     if webinar_open:
         builder.row(

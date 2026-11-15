@@ -21,6 +21,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Syntax check
         run: python -m compileall -q bot.py config.py db handlers keyboards services texts tools migrations
+      - name: Promotion tests
+        run: python tests/test_promo.py
 
   deploy:
     name: SSH deploy
@@ -41,7 +43,7 @@ jobs:
             set -euo pipefail
             cd ~/apps/aistack-bot
             git fetch origin main
-            git reset --hard origin/main
+            git merge --ff-only origin/main
             .venv/bin/pip install --quiet -r requirements.txt
             .venv/bin/alembic upgrade head
             sudo systemctl restart aistack-bot

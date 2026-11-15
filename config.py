@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     landing_supported: str = "https://aistackca.com/#lead-supported"
     landing_personal: str = "https://aistackca.com/#lead-personal"
     author_contact: str = "@vatyutov"
+    subscriber_promo_code: str = ""
+    subscriber_promo_url: str = ""
 
     # Лид-магнит с вебинара 10.06: ссылка на Unlisted-запись эфира.
     replay_url: str = "https://youtu.be/lsA4xftUMCk"

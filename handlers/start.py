@@ -10,6 +10,7 @@ from config import get_settings, is_webinar_source
 from db.models import Event, Lead
 from db.session import get_session
 from keyboards.inline import replay_kb, welcome_kb
+from handlers.promo import show_promo
 from services import webinar as webinar_svc
 from services.events import event_exists, log_event
 from texts import messages
@@ -64,6 +65,10 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             if webinar
             else False
         )
+
+    if source == "sub_promo":
+        await show_promo(message)
+        return
 
     webinar_open = not webinar_svc.is_over()
 

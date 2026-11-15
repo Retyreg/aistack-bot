@@ -157,8 +157,10 @@ check("CTA: дата подставляется", "27 августа" in cta)
 
 # 10. Кнопка вебинара уходит из меню после эфира
 from keyboards.inline import welcome_kb
-open_btns = [b.text for row in welcome_kb(webinar_open=True).inline_keyboard for b in row]
-closed_btns = [b.text for row in welcome_kb(webinar_open=False).inline_keyboard for b in row]
+open_btns = [b.text for row in welcome_kb(webinar_open=True).inline_keyboard
+             for b in row if b.callback_data != "promo_open"]
+closed_btns = [b.text for row in welcome_kb(webinar_open=False).inline_keyboard
+               for b in row if b.callback_data != "promo_open"]
 check("меню до эфира: 3 кнопки", len(open_btns) == 3, open_btns)
 check("меню после эфира: без вебинара", len(closed_btns) == 2 and not any("вебинар" in b for b in closed_btns), closed_btns)
 
